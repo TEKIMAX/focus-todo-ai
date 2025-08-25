@@ -1,0 +1,599 @@
+"use client"
+
+import { useCallback, useState, useEffect } from "react"
+import { Plus, RepeatIcon, Settings2Icon, XIcon, Brain, Clock, Target, Play, Pause, Settings } from "lucide-react"
+import { AnimatePresence, LayoutGroup, motion } from "framer-motion"
+import { toast } from "sonner"
+
+import { cn } from "@/lib/utils"
+import { Button } from "@/components/ui/button"
+import { Slider } from "@/components/ui/slider"
+import { DirectionAwareTabs } from "@/components/ui/direction-aware-tabs"
+import { FocusTimer } from "@/components/focus-timer"
+import { Reorder } from "framer-motion"
+import { DailyOnboarding } from "@/components/daily-onboarding"
+import { TaskCompletionDialog } from "@/components/task-completion-dialog"
+import { ProgressBadge } from "@/components/progress-badge"
+import { TodoDetailPanel } from "@/components/todo-detail-panel"
+import type { TodoItem, OrganizeRequest, OrganizeResponse, AISettings, DailyPlan, TaskCompletionDialog as TaskCompletionDialogType, ProgressBadge as ProgressBadgeType, TodoUpdateLog } from "@/lib/types"
+
+export function EnhancedFocusTodoApp() {
+  const [hasCompletedOnboarding, setHasCompletedOnboarding] = useState(false)
+  const [currentPlan, setCurrentPlan] = useState<DailyPlan | null>(null)
+  const [items, setItems] = useState<TodoItem[]>([])
+  const [openItemId, setOpenItemId] = useState<number | null>(null)
+  const [tabChangeRerender, setTabChangeRerender] = useState<number>(1)
+  const [aiSettings, setAiSettings] = useState<AISettings>({
+    topP: 0.9,
+    temperature: 0.5, // Reduced creativity as requested
+    maxTokens: 1000,
+  })
+  const [isOrganizing, setIsOrganizing] = useState(false)
+  const [currentFocusItem, setCurrentFocusItem] = useState<TodoItem | null>(null)
+  const [focusStartTime, setFocusStartTime] = useState<Date | null>(null)
+  const [completionDialog, setCompletionDialog] = useState<TaskCompletionDialogType>({
+    isOpen: false,
+    todoId: null,
+    timeSpent: 0,
+    completed: false
+  })
+  const [detailPanelOpen, setDetailPanelOpen] = useState(false)
+  const [selectedTodo, setSelectedTodo] = useState<TodoItem | null>(null)
+
+  // Check if we should show onboarding
+  useEffect(() => {
+    const today = new Date().toDateString()
+    const lastOnboardingDate = localStorage.getItem('lastOnboardingDate')
+    
+    if (lastOnboardingDate !== today) {
+      setHasCompletedOnboarding(false)
+    } else {
+      setHasCompletedOnboarding(true)
+      // Load saved plan for today
+      const savedPlan = localStorage.getItem(`dailyPlan_${today}`)
+      if (savedPlan) {
+        const plan = JSON.parse(savedPlan)
+        setCurrentPlan(plan)
+        setItems(plan.todos || [])
+      }
+    }
+  }, [])
+
+  const handleOnboardingComplete = useCallback((plan: DailyPlan) => {
+    const today = new Date().toDateString()
+    localStorage.setItem('lastOnboardingDate', today)
+    localStorage.setItem(`dailyPlan_${today}`, JSON.stringify(plan))
+    
+    setCurrentPlan(plan)
+    setItems(plan.todos)
+    setHasCompletedOnboarding(true)
+    toast.success("Your daily plan is ready!", {
+      description: `${plan.todos.length} tasks organized for maximum productivity`
+    })
+  }, [])
+
+  const handleSkipOnboarding = useCallback(() => {
+    setHasCompletedOnboarding(true)
+    toast.info("Skipped onboarding", {
+      description: "You can start adding tasks manually"
+    })
+  }, [])
+
+  const getProgressBadge = useCallback((todo: TodoItem): ProgressBadgeType | null => {
+    if (!todo.isCurrentlyActive) return null
+    
+    const timeSpent = todo.focusTimeSpent || 0
+    const percentage = Math.min((timeSpent / todo.estimatedMinutes) * 100, 100)
+    const timeRemaining = Math.max(todo.estimatedMinutes - timeSpent, 0)
+    
+    if (timeSpent > todo.estimatedMinutes * 1.5) {
+      return { status: 'danger', timeRemaining, percentage }
+    }
+    if (timeSpent > todo.estimatedMinutes * 1.1) {
+      return { status: 'warning', timeRemaining, percentage }
+    }
+    if (percentage > 80) {
+      return { status: 'success', timeRemaining, percentage }
+    }
+    return { status: 'info', timeRemaining, percentage }
+  }, [])
+
+  const addUpdateLog = useCallback((todoId: number, field: string, oldValue: string, newValue: string, updatedBy: 'ai' | 'human', context?: string) => {
+    const updateLog: TodoUpdateLog = {
+      id: `${Date.now()}-${Math.random()}`,
+      timestamp: new Date(),
+      field,
+      oldValue,
+      newValue,
+      updatedBy,
+      context
+    }
+
+    setItems(prev => prev.map(item => 
+      item.id === todoId 
+        ? { ...item, updateLog: [...(item.updateLog || []), updateLog] }
+        : item
+    ))
+  }, [])
+
+  const handleCompleteItem = useCallback((id: number, completed: boolean = true) => {
+    setItems((prevItems) =>
+      prevItems.map((item) => {
+        if (item.id === id) {
+          const oldStatus = item.checked ? 'completed' : 'pending'
+          const newStatus = completed ? 'completed' : 'pending'
+          
+          // Log the status change
+          if (oldStatus !== newStatus) {
+            addUpdateLog(id, 'status', oldStatus, newStatus, 'human', completed ? 'Task marked as completed' : 'Task marked as incomplete')
+          }
+          
+          return { 
+            ...item, 
+            checked: completed, 
+            completedAt: completed ? new Date() : undefined,
+            progressStatus: completed ? 'completed' : 'needs-clarification',
+            isCurrentlyActive: false
+          }
+        }
+        return item
+      })
+    )
+  }, [addUpdateLog])
+
+  const handleAddItem = useCallback(() => {
+    const newItem: TodoItem = {
+      id: Date.now(),
+      text: `New Task ${items.length + 1}`,
+      description: "",
+      checked: false,
+      priority: "medium",
+      complexity: "moderate",
+      estimatedMinutes: 30,
+      createdAt: new Date(),
+      order: items.length + 1,
+      focusTimeSpent: 0,
+      attempts: 0,
+      isCurrentlyActive: false,
+      progressStatus: 'not-started',
+      updateLog: []
+    }
+    setItems((prevItems) => [...prevItems, newItem])
+  }, [items.length])
+
+  const handleResetItems = useCallback(() => {
+    setItems([])
+    setCurrentPlan(null)
+    const today = new Date().toDateString()
+    localStorage.removeItem(`dailyPlan_${today}`)
+    localStorage.removeItem('lastOnboardingDate')
+    setHasCompletedOnboarding(false)
+  }, [])
+
+  const handleCloseOnDrag = useCallback(() => {
+    setOpenItemId(null)
+  }, [])
+
+  const organizeWithAI = useCallback(async () => {
+    if (isOrganizing || items.length === 0) return
+    
+    setIsOrganizing(true)
+    try {
+      const availableMinutes = currentPlan ? currentPlan.availableHours * 60 : 480 // 8 hours default
+      const request: OrganizeRequest = {
+        todos: items,
+        totalAvailableMinutes: availableMinutes,
+        focusMode: 'balanced',
+      }
+
+      const response = await fetch('/api/organize-todos', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(request),
+      })
+
+      if (!response.ok) throw new Error('Failed to organize todos')
+
+      const result: OrganizeResponse = await response.json()
+      
+      setItems(result.organizedTodos)
+      toast.success("Todos reorganized by AI!", {
+        description: result.reasoning,
+      })
+    } catch (error) {
+      console.error('Error organizing todos:', error)
+      toast.error("Failed to organize todos")
+    } finally {
+      setIsOrganizing(false)
+    }
+  }, [items, currentPlan, isOrganizing])
+
+  const startFocusSession = useCallback((item: TodoItem) => {
+    // Mark current item as active and stop any other active items
+    setItems(prev => prev.map(todo => ({
+      ...todo,
+      isCurrentlyActive: todo.id === item.id,
+      progressStatus: todo.id === item.id ? 'in-progress' : todo.progressStatus
+    })))
+    
+    setCurrentFocusItem(item)
+    setFocusStartTime(new Date())
+    toast.success(`Focus session started for: ${item.text}`)
+  }, [])
+
+  const endFocusSession = useCallback(() => {
+    if (!currentFocusItem || !focusStartTime) return
+    
+    const timeSpent = Math.round((new Date().getTime() - focusStartTime.getTime()) / 60000)
+    
+    // Update time spent
+    setItems(prev => prev.map(todo => 
+      todo.id === currentFocusItem.id 
+        ? { 
+            ...todo, 
+            focusTimeSpent: (todo.focusTimeSpent || 0) + timeSpent,
+            attempts: (todo.attempts || 0) + 1,
+            isCurrentlyActive: false
+          }
+        : todo
+    ))
+
+    // Show completion dialog
+    setCompletionDialog({
+      isOpen: true,
+      todoId: currentFocusItem.id,
+      timeSpent,
+      completed: false
+    })
+
+    setCurrentFocusItem(null)
+    setFocusStartTime(null)
+  }, [currentFocusItem, focusStartTime])
+
+  const handleTaskCompletion = useCallback((completed: boolean, notes?: string) => {
+    if (completionDialog.todoId) {
+      handleCompleteItem(completionDialog.todoId, completed)
+      
+      if (completed) {
+        toast.success("Task completed! 🎉")
+        // Auto-start next task if available
+        const currentIndex = items.findIndex(item => item.id === completionDialog.todoId)
+        const nextTask = items.find((item, index) => index > currentIndex && !item.checked)
+        if (nextTask) {
+          setTimeout(() => {
+            toast.info(`Next up: ${nextTask.text}`, {
+              action: {
+                label: "Start now",
+                onClick: () => startFocusSession(nextTask)
+              }
+            })
+          }, 1000)
+        }
+      } else {
+        toast.info("Task marked as incomplete")
+      }
+      
+      if (notes) {
+        // Update item with notes
+        setItems(prev => prev.map(todo => 
+          todo.id === completionDialog.todoId 
+            ? { ...todo, description: `${todo.description}\n\nNotes: ${notes}` }
+            : todo
+        ))
+      }
+    }
+    
+    setCompletionDialog({ isOpen: false, todoId: null, timeSpent: 0, completed: false })
+  }, [completionDialog.todoId, items, handleCompleteItem, startFocusSession])
+
+  const handleOpenDetailPanel = useCallback((todo: TodoItem) => {
+    setSelectedTodo(todo)
+    setDetailPanelOpen(true)
+  }, [])
+
+  const handleCloseDetailPanel = useCallback(() => {
+    setDetailPanelOpen(false)
+    setSelectedTodo(null)
+  }, [])
+
+  const handleUpdateTodo = useCallback((todoId: number, updates: Partial<TodoItem>, updatedBy: 'human' | 'ai', context?: string) => {
+    setItems(prev => prev.map(item => {
+      if (item.id === todoId) {
+        const updatedItem = { ...item, ...updates }
+        
+        // Log each field that changed
+        Object.keys(updates).forEach(key => {
+          const field = key as keyof TodoItem
+          if (field !== 'updateLog' && item[field] !== updates[field]) {
+            const oldValue = String(item[field] || '')
+            const newValue = String(updates[field] || '')
+            addUpdateLog(todoId, field, oldValue, newValue, updatedBy, context)
+          }
+        })
+        
+        return updatedItem
+      }
+      return item
+    }))
+    
+    // Update selected todo if it's the one being edited
+    if (selectedTodo?.id === todoId) {
+      setSelectedTodo(prev => prev ? { ...prev, ...updates } : null)
+    }
+  }, [addUpdateLog, selectedTodo])
+
+  const renderListItem = (item: TodoItem, index: number) => {
+    const progress = getProgressBadge(item)
+    
+    return (
+      <Reorder.Item
+        key={item.id}
+        value={item}
+        className="mb-4 p-4 bg-neutral-900 border border-neutral-800 rounded-lg cursor-grab active:cursor-grabbing"
+      >
+        <div className="flex flex-col space-y-3">
+          <div className="flex items-start justify-between">
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center space-x-3 mb-2">
+                <input
+                  type="checkbox"
+                  checked={item.checked}
+                  onChange={() => handleCompleteItem(item.id)}
+                  className="w-4 h-4 text-[#13EEE3] bg-neutral-800 border-neutral-600 rounded focus:ring-[#13EEE3] focus:ring-2"
+                />
+                <span className={cn(
+                  "font-medium text-white text-sm",
+                  item.checked && "line-through text-neutral-500"
+                )}>
+                  {item.text}
+                </span>
+              </div>
+              
+              {item.description && (
+                <p className="text-neutral-400 text-sm ml-7 mb-2">{item.description}</p>
+              )}
+              
+              <div className="ml-7 space-y-2">
+                <div className="flex items-center space-x-1 text-xs">
+                  <div className={cn(
+                    "w-2 h-2 rounded-full",
+                    item.priority === 'urgent' ? 'bg-red-500' :
+                    item.priority === 'high' ? 'bg-orange-500' :
+                    item.priority === 'medium' ? 'bg-yellow-500' : 'bg-green-500'
+                  )} />
+                  <span className="text-neutral-500">{item.priority}</span>
+                </div>
+                
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-4 text-xs">
+                    <div className="flex items-center space-x-1">
+                      <Clock className="w-3 h-3 text-neutral-500" />
+                      <span className="text-neutral-500">{item.estimatedMinutes}m</span>
+                    </div>
+                    {item.focusTimeSpent && item.focusTimeSpent > 0 && (
+                      <div className="flex items-center space-x-1">
+                        <Target className="w-3 h-3 text-[#13EEE3]" />
+                        <span className="text-[#13EEE3]">{item.focusTimeSpent}m spent</span>
+                      </div>
+                    )}
+                  </div>
+                  {progress && <ProgressBadge progress={progress} />}
+                </div>
+              </div>
+            </div>
+            
+            <div className="flex items-center space-x-2">
+              <Button
+                onClick={() => handleOpenDetailPanel(item)}
+                size="sm"
+                variant="ghost"
+                className="text-neutral-400 hover:text-white hover:bg-neutral-800"
+              >
+                <Settings className="w-3 h-3" />
+              </Button>
+              
+              {!item.checked && (
+                <Button
+                  onClick={() => startFocusSession(item)}
+                  disabled={!!currentFocusItem}
+                  size="sm"
+                  className={cn(
+                    "bg-[#13EEE3] hover:bg-[#13EEE3]/80 text-black",
+                    item.isCurrentlyActive && "bg-orange-500 hover:bg-orange-600 text-white"
+                  )}
+                >
+                  {item.isCurrentlyActive ? (
+                    <>
+                      <Pause className="w-3 h-3 mr-1" />
+                      Active
+                    </>
+                  ) : (
+                    <>
+                      <Play className="w-3 h-3 mr-1" />
+                      Focus
+                    </>
+                  )}
+                </Button>
+              )}
+            </div>
+          </div>
+        </div>
+      </Reorder.Item>
+    )
+  }
+
+  if (!hasCompletedOnboarding) {
+    return (
+      <DailyOnboarding 
+        onComplete={handleOnboardingComplete}
+        onSkip={handleSkipOnboarding}
+      />
+    )
+  }
+
+  // No need for todoItems mapping anymore since we're using direct Reorder
+
+  const completedCount = items.filter(item => item.checked).length
+  const totalCount = items.length
+  const progressPercentage = totalCount > 0 ? (completedCount / totalCount) * 100 : 0
+
+  return (
+    <div className="min-h-screen bg-black text-white p-4">
+      <div className="max-w-4xl mx-auto">
+        {/* Header */}
+        <div className="mb-8">
+          <div className="flex items-center justify-between mb-4">
+            <h1 className="text-3xl font-bold">Focus Todo AI</h1>
+            <div className="flex items-center space-x-2">
+              <Button
+                onClick={handleResetItems}
+                variant="ghost"
+                size="sm"
+                className="text-neutral-400 hover:text-white"
+              >
+                <RepeatIcon className="w-4 h-4 mr-2" />
+                New Day
+              </Button>
+            </div>
+          </div>
+          
+          {currentPlan && (
+            <div className="bg-neutral-900 border border-neutral-800 rounded-lg p-4 mb-4">
+              <div className="flex items-center justify-between mb-2">
+                <h2 className="text-lg font-semibold">Today's Plan</h2>
+                <div className="text-sm text-neutral-400">
+                  {currentPlan.startTime} - {currentPlan.endTime}
+                </div>
+              </div>
+              <div className="flex items-center space-x-4 text-sm text-neutral-400 mb-3">
+                <span>{totalCount} tasks</span>
+                <span>•</span>
+                <span>{Math.round(progressPercentage)}% complete</span>
+                <span>•</span>
+                <span>{currentPlan.availableHours}h available</span>
+              </div>
+              <div className="w-full bg-neutral-800 rounded-full h-2">
+                <motion.div
+                  initial={{ width: 0 }}
+                  animate={{ width: `${progressPercentage}%` }}
+                  className="bg-[#13EEE3] h-2 rounded-full"
+                />
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Focus Timer */}
+        {currentFocusItem && (
+          <div className="mb-8">
+            <div className="bg-neutral-950 border border-neutral-800 rounded-xl p-6">
+              <div className="text-center mb-4">
+                <h3 className="text-xl font-semibold mb-2">Focus Session</h3>
+                <p className="text-neutral-400">{currentFocusItem.text}</p>
+              </div>
+              <FocusTimer
+                initialMinutes={currentFocusItem.estimatedMinutes}
+                onComplete={endFocusSession}
+                className="mb-4"
+              />
+              <div className="text-center">
+                <Button
+                  onClick={endFocusSession}
+                  variant="outline"
+                  className="border-orange-500 text-orange-400 hover:bg-orange-500 hover:text-white"
+                >
+                  End Session
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Actions */}
+        <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center space-x-3">
+            <Button
+              onClick={handleAddItem}
+              className="bg-[#13EEE3] hover:bg-[#13EEE3]/80 text-black"
+            >
+              <Plus className="w-4 h-4 mr-2" />
+              Add Task
+            </Button>
+            
+            <Button
+              onClick={organizeWithAI}
+              disabled={isOrganizing || items.length === 0}
+              variant="outline"
+              className="border-[#13EEE3] text-[#13EEE3] hover:bg-[#13EEE3] hover:text-black"
+            >
+              {isOrganizing ? (
+                <>
+                  <div className="w-4 h-4 border-2 border-[#13EEE3] border-t-transparent rounded-full animate-spin mr-2" />
+                  Organizing...
+                </>
+              ) : (
+                <>
+                  <Brain className="w-4 h-4 mr-2" />
+                  AI Organize
+                </>
+              )}
+            </Button>
+          </div>
+        </div>
+
+        {/* Todo List */}
+        <div className="bg-neutral-950 border border-neutral-800 rounded-xl">
+          {items.length === 0 ? (
+            <div className="p-12 text-center">
+              <div className="text-neutral-500 mb-4">
+                <Target className="w-12 h-12 mx-auto mb-4" />
+                <p>No tasks yet. Add your first task to get started!</p>
+              </div>
+              <Button
+                onClick={handleAddItem}
+                className="bg-[#13EEE3] hover:bg-[#13EEE3]/80 text-black"
+              >
+                <Plus className="w-4 h-4 mr-2" />
+                Add Task
+              </Button>
+            </div>
+          ) : (
+            <Reorder.Group
+              axis="y"
+              values={items}
+              onReorder={(reorderedItems) => {
+                const reorderedTodos = reorderedItems.map((item, index) => ({
+                  ...item,
+                  order: index + 1
+                }))
+                setItems(reorderedTodos)
+              }}
+              className="space-y-0"
+            >
+              {items.map((item, index) => renderListItem(item, index))}
+            </Reorder.Group>
+          )}
+        </div>
+
+        {/* Task Completion Dialog */}
+        <TaskCompletionDialog
+          isOpen={completionDialog.isOpen}
+          todo={items.find(item => item.id === completionDialog.todoId) || null}
+          timeSpent={completionDialog.timeSpent}
+          onComplete={handleTaskCompletion}
+          onClose={() => setCompletionDialog({ isOpen: false, todoId: null, timeSpent: 0, completed: false })}
+        />
+
+        {/* Todo Detail Panel */}
+        {selectedTodo && (
+          <TodoDetailPanel
+            todo={selectedTodo}
+            isOpen={detailPanelOpen}
+            onClose={handleCloseDetailPanel}
+            onUpdate={(updates, updatedBy, context) => handleUpdateTodo(selectedTodo.id, updates, updatedBy, context)}
+          />
+        )}
+      </div>
+    </div>
+  )
+}
