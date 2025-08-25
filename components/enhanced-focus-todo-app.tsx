@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useState, useEffect } from "react"
+import { useCallback, useEffect } from "react"
 import { Plus, RepeatIcon, Settings2Icon, XIcon, Brain, Clock, Target, Play, Pause, Settings } from "lucide-react"
 import { AnimatePresence, LayoutGroup, motion } from "framer-motion"
 import { toast } from "sonner"
@@ -15,30 +15,37 @@ import { DailyOnboarding } from "@/components/daily-onboarding"
 import { TaskCompletionDialog } from "@/components/task-completion-dialog"
 import { ProgressBadge } from "@/components/progress-badge"
 import { TodoDetailPanel } from "@/components/todo-detail-panel"
-import type { TodoItem, OrganizeRequest, OrganizeResponse, AISettings, DailyPlan, TaskCompletionDialog as TaskCompletionDialogType, ProgressBadge as ProgressBadgeType, TodoUpdateLog } from "@/lib/types"
+import { useTodoStore } from "@/lib/store"
+import type { TodoItem, OrganizeRequest, OrganizeResponse, DailyPlan, ProgressBadge as ProgressBadgeType } from "@/lib/types"
 
 export function EnhancedFocusTodoApp() {
-  const [hasCompletedOnboarding, setHasCompletedOnboarding] = useState(false)
-  const [currentPlan, setCurrentPlan] = useState<DailyPlan | null>(null)
-  const [items, setItems] = useState<TodoItem[]>([])
-  const [openItemId, setOpenItemId] = useState<number | null>(null)
-  const [tabChangeRerender, setTabChangeRerender] = useState<number>(1)
-  const [aiSettings, setAiSettings] = useState<AISettings>({
-    topP: 0.9,
-    temperature: 0.5, // Reduced creativity as requested
-    maxTokens: 1000,
-  })
-  const [isOrganizing, setIsOrganizing] = useState(false)
-  const [currentFocusItem, setCurrentFocusItem] = useState<TodoItem | null>(null)
-  const [focusStartTime, setFocusStartTime] = useState<Date | null>(null)
-  const [completionDialog, setCompletionDialog] = useState<TaskCompletionDialogType>({
-    isOpen: false,
-    todoId: null,
-    timeSpent: 0,
-    completed: false
-  })
-  const [detailPanelOpen, setDetailPanelOpen] = useState(false)
-  const [selectedTodo, setSelectedTodo] = useState<TodoItem | null>(null)
+  // Use Zustand store
+  const {
+    hasCompletedOnboarding,
+    currentPlan,
+    items,
+    aiSettings,
+    isOrganizing,
+    currentFocusItem,
+    focusStartTime,
+    completionDialog,
+    detailPanelOpen,
+    selectedTodo,
+    setHasCompletedOnboarding,
+    setCurrentPlan,
+    setItems,
+    setIsOrganizing,
+    setCurrentFocusItem,
+    setFocusStartTime,
+    setCompletionDialog,
+    addUpdateLog,
+    completeItem,
+    addItem,
+    resetItems,
+    updateTodo,
+    openDetailPanel,
+    closeDetailPanel,
+  } = useTodoStore()
 
   // Check if we should show onboarding
   useEffect(() => {
@@ -98,81 +105,18 @@ export function EnhancedFocusTodoApp() {
     return { status: 'info', timeRemaining, percentage }
   }, [])
 
-  const addUpdateLog = useCallback((todoId: number, field: string, oldValue: string, newValue: string, updatedBy: 'ai' | 'human', context?: string) => {
-    const updateLog: TodoUpdateLog = {
-      id: `${Date.now()}-${Math.random()}`,
-      timestamp: new Date(),
-      field,
-      oldValue,
-      newValue,
-      updatedBy,
-      context
-    }
-
-    setItems(prev => prev.map(item => 
-      item.id === todoId 
-        ? { ...item, updateLog: [...(item.updateLog || []), updateLog] }
-        : item
-    ))
-  }, [])
-
+  // Use store methods directly
   const handleCompleteItem = useCallback((id: number, completed: boolean = true) => {
-    setItems((prevItems) =>
-      prevItems.map((item) => {
-        if (item.id === id) {
-          const oldStatus = item.checked ? 'completed' : 'pending'
-          const newStatus = completed ? 'completed' : 'pending'
-          
-          // Log the status change
-          if (oldStatus !== newStatus) {
-            addUpdateLog(id, 'status', oldStatus, newStatus, 'human', completed ? 'Task marked as completed' : 'Task marked as incomplete')
-          }
-          
-          return { 
-            ...item, 
-            checked: completed, 
-            completedAt: completed ? new Date() : undefined,
-            progressStatus: completed ? 'completed' : 'needs-clarification',
-            isCurrentlyActive: false
-          }
-        }
-        return item
-      })
-    )
-  }, [addUpdateLog])
+    completeItem(id, completed)
+  }, [completeItem])
 
   const handleAddItem = useCallback(() => {
-    const newItem: TodoItem = {
-      id: Date.now(),
-      text: `New Task ${items.length + 1}`,
-      description: "",
-      checked: false,
-      priority: "medium",
-      complexity: "moderate",
-      estimatedMinutes: 30,
-      createdAt: new Date(),
-      order: items.length + 1,
-      focusTimeSpent: 0,
-      attempts: 0,
-      isCurrentlyActive: false,
-      progressStatus: 'not-started',
-      updateLog: []
-    }
-    setItems((prevItems) => [...prevItems, newItem])
-  }, [items.length])
+    addItem()
+  }, [addItem])
 
   const handleResetItems = useCallback(() => {
-    setItems([])
-    setCurrentPlan(null)
-    const today = new Date().toDateString()
-    localStorage.removeItem(`dailyPlan_${today}`)
-    localStorage.removeItem('lastOnboardingDate')
-    setHasCompletedOnboarding(false)
-  }, [])
-
-  const handleCloseOnDrag = useCallback(() => {
-    setOpenItemId(null)
-  }, [])
+    resetItems()
+  }, [resetItems])
 
   const organizeWithAI = useCallback(async () => {
     if (isOrganizing || items.length === 0) return
@@ -196,6 +140,14 @@ export function EnhancedFocusTodoApp() {
 
       const result: OrganizeResponse = await response.json()
       
+      // Log AI reorganization for each todo
+      result.organizedTodos.forEach((todo, index) => {
+        const originalTodo = items.find(item => item.id === todo.id)
+        if (originalTodo && originalTodo.order !== todo.order) {
+          addUpdateLog(todo.id, 'order', String(originalTodo.order), String(todo.order), 'ai', 'AI reorganization')
+        }
+      })
+      
       setItems(result.organizedTodos)
       toast.success("Todos reorganized by AI!", {
         description: result.reasoning,
@@ -206,7 +158,7 @@ export function EnhancedFocusTodoApp() {
     } finally {
       setIsOrganizing(false)
     }
-  }, [items, currentPlan, isOrganizing])
+  }, [items, currentPlan, isOrganizing, setIsOrganizing, setItems, addUpdateLog])
 
   const startFocusSession = useCallback((item: TodoItem) => {
     // Mark current item as active and stop any other active items
@@ -219,7 +171,7 @@ export function EnhancedFocusTodoApp() {
     setCurrentFocusItem(item)
     setFocusStartTime(new Date())
     toast.success(`Focus session started for: ${item.text}`)
-  }, [])
+  }, [setItems, setCurrentFocusItem, setFocusStartTime])
 
   const endFocusSession = useCallback(() => {
     if (!currentFocusItem || !focusStartTime) return
@@ -248,7 +200,7 @@ export function EnhancedFocusTodoApp() {
 
     setCurrentFocusItem(null)
     setFocusStartTime(null)
-  }, [currentFocusItem, focusStartTime])
+  }, [currentFocusItem, focusStartTime, setItems, setCompletionDialog, setCurrentFocusItem, setFocusStartTime])
 
   const handleTaskCompletion = useCallback((completed: boolean, notes?: string) => {
     if (completionDialog.todoId) {
@@ -273,54 +225,28 @@ export function EnhancedFocusTodoApp() {
         toast.info("Task marked as incomplete")
       }
       
-      if (notes) {
+      if (notes && completionDialog.todoId) {
         // Update item with notes
-        setItems(prev => prev.map(todo => 
-          todo.id === completionDialog.todoId 
-            ? { ...todo, description: `${todo.description}\n\nNotes: ${notes}` }
-            : todo
-        ))
+        updateTodo(completionDialog.todoId, { 
+          description: `${items.find(t => t.id === completionDialog.todoId)?.description || ''}\n\nNotes: ${notes}` 
+        }, 'human', 'Added completion notes')
       }
     }
     
     setCompletionDialog({ isOpen: false, todoId: null, timeSpent: 0, completed: false })
-  }, [completionDialog.todoId, items, handleCompleteItem, startFocusSession])
+  }, [completionDialog.todoId, items, handleCompleteItem, startFocusSession, updateTodo, setCompletionDialog])
 
   const handleOpenDetailPanel = useCallback((todo: TodoItem) => {
-    setSelectedTodo(todo)
-    setDetailPanelOpen(true)
-  }, [])
+    openDetailPanel(todo)
+  }, [openDetailPanel])
 
   const handleCloseDetailPanel = useCallback(() => {
-    setDetailPanelOpen(false)
-    setSelectedTodo(null)
-  }, [])
+    closeDetailPanel()
+  }, [closeDetailPanel])
 
   const handleUpdateTodo = useCallback((todoId: number, updates: Partial<TodoItem>, updatedBy: 'human' | 'ai', context?: string) => {
-    setItems(prev => prev.map(item => {
-      if (item.id === todoId) {
-        const updatedItem = { ...item, ...updates }
-        
-        // Log each field that changed
-        Object.keys(updates).forEach(key => {
-          const field = key as keyof TodoItem
-          if (field !== 'updateLog' && item[field] !== updates[field]) {
-            const oldValue = String(item[field] || '')
-            const newValue = String(updates[field] || '')
-            addUpdateLog(todoId, field, oldValue, newValue, updatedBy, context)
-          }
-        })
-        
-        return updatedItem
-      }
-      return item
-    }))
-    
-    // Update selected todo if it's the one being edited
-    if (selectedTodo?.id === todoId) {
-      setSelectedTodo(prev => prev ? { ...prev, ...updates } : null)
-    }
-  }, [addUpdateLog, selectedTodo])
+    updateTodo(todoId, updates, updatedBy, context)
+  }, [updateTodo])
 
   const renderListItem = (item: TodoItem, index: number) => {
     const progress = getProgressBadge(item)
