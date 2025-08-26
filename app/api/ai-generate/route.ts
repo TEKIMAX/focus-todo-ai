@@ -10,43 +10,65 @@ async function getAIProvider(request: NextRequest) {
     const body = await request.json()
     const { appSettings, ...otherData } = body
 
+    // Default to OpenAI if no settings provided
     if (!appSettings) {
-      // Default to OpenAI with environment API key
+      const apiKey = process.env.OPENAI_API_KEY
+      if (!apiKey) {
+        throw new Error('OpenAI API key not configured in environment variables')
+      }
+      
       return {
         provider: openai('gpt-5', { reasoningEffort: 'medium' }),
         data: otherData
       }
     }
 
-    if (appSettings.aiProvider === 'ollama') {
-      // Create Ollama provider
-      const ollamaProvider = createOpenAI({
-        baseURL: `${appSettings.ollamaBaseUrl}/v1`,
-        apiKey: 'ollama', // Ollama doesn't require a real API key
-      })
+    // Check if user wants to use Ollama
+    if (appSettings.aiProvider === 'ollama' && appSettings.useOllama) {
+      try {
+        // Test Ollama connection first
+        const testResponse = await fetch(`${appSettings.ollamaBaseUrl}/api/tags`, {
+          method: 'GET',
+          headers: { 'Content-Type': 'application/json' }
+        })
+        
+        if (!testResponse.ok) {
+          console.warn('Ollama not available, falling back to OpenAI')
+          throw new Error('Ollama connection failed')
+        }
 
-      const modelName = appSettings.selectedModel || 'llama2'
-      
-      return {
-        provider: ollamaProvider(modelName),
-        data: otherData
-      }
-    } else {
-      // Use OpenAI
-      const apiKey = appSettings.openaiApiKey || process.env.OPENAI_API_KEY
-      
-      if (!apiKey) {
-        throw new Error('OpenAI API key not configured')
-      }
+        // Create Ollama provider
+        const ollamaProvider = createOpenAI({
+          baseURL: `${appSettings.ollamaBaseUrl}/v1`,
+          apiKey: 'ollama', // Ollama doesn't require a real API key
+        })
 
-      const openaiProvider = createOpenAI({
-        apiKey: apiKey
-      })
-
-      return {
-        provider: openaiProvider('gpt-5', { reasoningEffort: 'medium' }),
-        data: otherData
+        const modelName = appSettings.selectedModel || 'llama2'
+        
+        return {
+          provider: ollamaProvider(modelName),
+          data: otherData
+        }
+      } catch (ollamaError) {
+        console.warn('Ollama failed, falling back to OpenAI:', ollamaError)
+        // Fall back to OpenAI
       }
+    }
+
+    // Use OpenAI (default or fallback)
+    const apiKey = appSettings.openaiApiKey || process.env.OPENAI_API_KEY
+    
+    if (!apiKey) {
+      throw new Error('OpenAI API key not configured. Please add OPENAI_API_KEY to your environment variables or configure it in settings.')
+    }
+
+    const openaiProvider = createOpenAI({
+      apiKey: apiKey
+    })
+
+    return {
+      provider: openaiProvider('gpt-5', { reasoningEffort: 'medium' }),
+      data: otherData
     }
   } catch (error) {
     throw new Error(`Failed to configure AI provider: ${error instanceof Error ? error.message : 'Unknown error'}`)
