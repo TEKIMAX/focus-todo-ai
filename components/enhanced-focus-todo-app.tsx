@@ -1,7 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useState } from "react"
-import { Plus, RepeatIcon, Settings2Icon, XIcon, Brain, Clock, Target, Play, Pause, Settings, Trash2, History, FileText, X } from "lucide-react"
+import { Plus, RepeatIcon, Settings2Icon, XIcon, Brain, Clock, Target, Play, Pause, Settings, Trash2, History, FileText, X, FileDown } from "lucide-react"
 import { AnimatePresence, LayoutGroup, motion } from "framer-motion"
 import { toast } from "sonner"
 
@@ -422,6 +422,79 @@ export function EnhancedFocusTodoApp() {
     )
   }
 
+  const generateTodoTextReport = useCallback(() => {
+    if (!currentPlan || items.length === 0) {
+      toast.error("No todos available to generate report")
+      return
+    }
+
+    const today = new Date().toLocaleDateString()
+    const completedTodos = items.filter(item => item.checked)
+    const pendingTodos = items.filter(item => !item.checked)
+    
+    let report = `# Daily Todo Report - ${today}\n\n`
+    report += `## Plan Overview\n`
+    report += `- **Date**: ${today}\n`
+    report += `- **Time Range**: ${currentPlan.startTime} - ${currentPlan.endTime}\n`
+    report += `- **Available Hours**: ${currentPlan.availableHours}h\n`
+    report += `- **Total Tasks**: ${items.length}\n`
+    report += `- **Completed**: ${completedTodos.length}\n`
+    report += `- **Pending**: ${pendingTodos.length}\n`
+    report += `- **Progress**: ${Math.round((completedTodos.length / items.length) * 100)}%\n\n`
+    
+    report += `## Completed Tasks\n`
+    if (completedTodos.length > 0) {
+      completedTodos.forEach((todo, index) => {
+        report += `${index + 1}. **${todo.text}**\n`
+        if (todo.description) report += `   - ${todo.description}\n`
+        report += `   - Priority: ${todo.priority} | Complexity: ${todo.complexity}\n`
+        report += `   - Estimated: ${todo.estimatedMinutes}m`
+        if (todo.focusTimeSpent && todo.focusTimeSpent > 0) {
+          report += ` | Time Spent: ${todo.focusTimeSpent}m\n`
+        } else {
+          report += `\n`
+        }
+        report += `\n`
+      })
+    } else {
+      report += `No tasks completed yet.\n\n`
+    }
+    
+    report += `## Pending Tasks\n`
+    if (pendingTodos.length > 0) {
+      pendingTodos.forEach((todo, index) => {
+        report += `${index + 1}. **${todo.text}**\n`
+        if (todo.description) report += `   - ${todo.description}\n`
+        report += `   - Priority: ${todo.priority} | Complexity: ${todo.complexity}\n`
+        report += `   - Estimated: ${todo.estimatedMinutes}m\n\n`
+      })
+    } else {
+      report += `All tasks completed! 🎉\n\n`
+    }
+    
+    report += `## Time Summary\n`
+    const totalEstimated = items.reduce((sum, todo) => sum + todo.estimatedMinutes, 0)
+    const totalSpent = items.reduce((sum, todo) => sum + (todo.focusTimeSpent || 0), 0)
+    report += `- **Total Estimated Time**: ${totalEstimated}m (${Math.round(totalEstimated / 60 * 10) / 10}h)\n`
+    report += `- **Total Time Spent**: ${totalSpent}m (${Math.round(totalSpent / 60 * 10) / 10}h)\n`
+    report += `- **Time Efficiency**: ${totalSpent > 0 ? Math.round((totalEstimated / totalSpent) * 100) : 0}%\n\n`
+    
+    report += `---\n*Report generated on ${new Date().toLocaleString()}*`
+
+    // Create and download the report
+    const element = document.createElement('a')
+    const file = new Blob([report], { type: 'text/markdown' })
+    element.href = URL.createObjectURL(file)
+    element.download = `todo-report-${today.replace(/\//g, '-')}.md`
+    document.body.appendChild(element)
+    element.click()
+    document.body.removeChild(element)
+    
+    toast.success("Todo report generated!", {
+      description: "Your daily todo report has been downloaded"
+    })
+  }, [currentPlan, items])
+
   // Show landing page
   if (showLanding) {
     return (
@@ -517,6 +590,16 @@ export function EnhancedFocusTodoApp() {
               >
                 <FileText className="w-4 h-4 mr-2" />
                 Documents
+              </Button>
+              <Button
+                onClick={generateTodoTextReport}
+                variant="ghost"
+                size="sm"
+                className="text-neutral-400 hover:text-white"
+                disabled={!currentPlan || items.length === 0}
+              >
+                <FileDown className="w-4 h-4 mr-2" />
+                Export Report
               </Button>
               <Button
                 onClick={openSettings}
