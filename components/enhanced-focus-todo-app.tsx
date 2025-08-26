@@ -1,7 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useState } from "react"
-import { Plus, RepeatIcon, Settings2Icon, XIcon, Brain, Clock, Target, Play, Pause, Settings, Trash2, History } from "lucide-react"
+import { Plus, RepeatIcon, Settings2Icon, XIcon, Brain, Clock, Target, Play, Pause, Settings, Trash2, History, FileText } from "lucide-react"
 import { AnimatePresence, LayoutGroup, motion } from "framer-motion"
 import { toast } from "sonner"
 
@@ -18,6 +18,7 @@ import { TodoDetailPanel } from "@/components/todo-detail-panel"
 import { SettingsPage } from "@/components/settings-page"
 import { LandingPage } from "@/components/landing-page"
 import { HistoryPage } from "@/components/history-page"
+import { DocumentGenerationPage } from "@/components/document-generation-page"
 import { useTodoStore } from "@/lib/store"
 import type { TodoItem, OrganizeRequest, OrganizeResponse, DailyPlan, ProgressBadge as ProgressBadgeType } from "@/lib/types"
 
@@ -36,6 +37,7 @@ export function EnhancedFocusTodoApp() {
     detailPanelOpen,
     selectedTodo,
     showSettings,
+    showDocumentGeneration,
     setHasCompletedOnboarding,
     setCurrentPlan,
     setItems,
@@ -54,7 +56,9 @@ export function EnhancedFocusTodoApp() {
     closeDetailPanel,
     openSettings,
     closeSettings,
+    setShowDocumentGeneration,
     saveDailyPlan,
+    saveCurrentDayToHistory,
     getDailyPlans,
   } = useTodoStore()
 
@@ -68,19 +72,33 @@ export function EnhancedFocusTodoApp() {
     const today = new Date().toDateString()
     const lastOnboardingDate = localStorage.getItem('lastOnboardingDate')
     
-    if (lastOnboardingDate !== today) {
+    if (lastOnboardingDate && lastOnboardingDate !== today) {
+      // It's a new day, save the previous day's data to history
+      const savedPlan = saveCurrentDayToHistory()
+      if (savedPlan) {
+        toast.success("Previous day's plan saved to history!", {
+          description: `${savedPlan.todos.length} tasks archived`
+        })
+      }
+      
+      // Clear current data and show onboarding for new day
+      setCurrentPlan(null)
+      setItems([])
       setHasCompletedOnboarding(false)
-    } else {
+    } else if (lastOnboardingDate === today) {
+      // Same day, load saved plan
       setHasCompletedOnboarding(true)
-      // Load saved plan for today
       const savedPlan = localStorage.getItem(`dailyPlan_${today}`)
       if (savedPlan) {
         const plan = JSON.parse(savedPlan)
         setCurrentPlan(plan)
         setItems(plan.todos || [])
       }
+    } else {
+      // First time using the app
+      setHasCompletedOnboarding(false)
     }
-  }, [])
+  }, [saveCurrentDayToHistory])
 
   const handleOnboardingComplete = useCallback((plan: DailyPlan) => {
     const today = new Date().toDateString()
@@ -418,6 +436,15 @@ export function EnhancedFocusTodoApp() {
     )
   }
 
+  // Show document generation page
+  if (showDocumentGeneration) {
+    return (
+      <DocumentGenerationPage
+        onClose={() => setShowDocumentGeneration(false)}
+      />
+    )
+  }
+
   // Show settings page
   if (showSettings) {
     return (
@@ -462,6 +489,15 @@ export function EnhancedFocusTodoApp() {
                 History
               </Button>
               <Button
+                onClick={() => setShowDocumentGeneration(true)}
+                variant="ghost"
+                size="sm"
+                className="text-neutral-400 hover:text-white"
+              >
+                <FileText className="w-4 h-4 mr-2" />
+                Documents
+              </Button>
+              <Button
                 onClick={openSettings}
                 variant="ghost"
                 size="sm"
@@ -471,7 +507,34 @@ export function EnhancedFocusTodoApp() {
                 Settings
               </Button>
               <Button
-                onClick={handleResetItems}
+                onClick={() => {
+                  const savedPlan = saveCurrentDayToHistory()
+                  if (savedPlan) {
+                    toast.success("Current day saved to history!", {
+                      description: `${savedPlan.todos.length} tasks archived`
+                    })
+                  }
+                }}
+                variant="ghost"
+                size="sm"
+                className="text-neutral-400 hover:text-white"
+                disabled={!currentPlan || items.length === 0}
+              >
+                <History className="w-4 h-4 mr-2" />
+                Save Day
+              </Button>
+              <Button
+                onClick={() => {
+                  const savedPlan = saveCurrentDayToHistory()
+                  if (savedPlan) {
+                    toast.success("Previous day saved to history!", {
+                      description: `${savedPlan.todos.length} tasks archived`
+                    })
+                  }
+                  setCurrentPlan(null)
+                  setItems([])
+                  setHasCompletedOnboarding(false)
+                }}
                 variant="ghost"
                 size="sm"
                 className="text-neutral-400 hover:text-white"
@@ -501,7 +564,7 @@ export function EnhancedFocusTodoApp() {
                 <motion.div
                   initial={{ width: 0 }}
                   animate={{ width: `${progressPercentage}%` }}
-                  className="bg-[#13EEE3] h-2 rounded-full"
+                  className="bg-blue-500 h-2 rounded-full"
                 />
               </div>
             </div>

@@ -16,6 +16,7 @@ interface TodoStore {
   detailPanelOpen: boolean
   selectedTodo: TodoItem | null
   showSettings: boolean
+  showDocumentGeneration: boolean
 
   // Actions
   setHasCompletedOnboarding: (completed: boolean) => void
@@ -30,6 +31,7 @@ interface TodoStore {
   setDetailPanelOpen: (open: boolean) => void
   setSelectedTodo: (todo: TodoItem | null) => void
   setShowSettings: (show: boolean) => void
+  setShowDocumentGeneration: (show: boolean) => void
 
   // Helper actions
   addUpdateLog: (todoId: number, field: string, oldValue: string, newValue: string, updatedBy: 'ai' | 'human', context?: string) => void
@@ -43,6 +45,7 @@ interface TodoStore {
   openSettings: () => void
   closeSettings: () => void
   saveDailyPlan: (plan: DailyPlan) => void
+  saveCurrentDayToHistory: () => DailyPlan | null
   getDailyPlans: () => DailyPlan[]
 }
 
@@ -80,6 +83,7 @@ export const useTodoStore = create<TodoStore>()(
       detailPanelOpen: false,
       selectedTodo: null,
       showSettings: false,
+      showDocumentGeneration: false,
 
       // Basic setters
       setHasCompletedOnboarding: (completed) => set({ hasCompletedOnboarding: completed }),
@@ -98,6 +102,7 @@ export const useTodoStore = create<TodoStore>()(
       setDetailPanelOpen: (open) => set({ detailPanelOpen: open }),
       setSelectedTodo: (todo) => set({ selectedTodo: todo }),
       setShowSettings: (show) => set({ showSettings: show }),
+      setShowDocumentGeneration: (show) => set({ showDocumentGeneration: show }),
 
       // Helper actions
       addUpdateLog: (todoId, field, oldValue, newValue, updatedBy, context) => {
@@ -244,6 +249,30 @@ export const useTodoStore = create<TodoStore>()(
         const savedPlans = JSON.parse(localStorage.getItem('dailyPlans') || '{}')
         savedPlans[today] = plan
         localStorage.setItem('dailyPlans', JSON.stringify(savedPlans))
+      },
+
+      saveCurrentDayToHistory: () => {
+        const state = get()
+        if (state.currentPlan && state.items.length > 0) {
+          const today = new Date().toDateString()
+          const planToSave: DailyPlan = {
+            ...state.currentPlan,
+            date: new Date(),
+            todos: state.items.map(item => ({
+              ...item,
+              createdAt: item.createdAt instanceof Date ? item.createdAt : new Date(item.createdAt),
+              completedAt: item.completedAt instanceof Date ? item.completedAt : new Date(item.completedAt),
+              deadline: item.deadline instanceof Date ? item.deadline : item.deadline ? new Date(item.deadline) : undefined
+            }))
+          }
+          
+          const savedPlans = JSON.parse(localStorage.getItem('dailyPlans') || '{}')
+          savedPlans[today] = planToSave
+          localStorage.setItem('dailyPlans', JSON.stringify(savedPlans))
+          
+          return planToSave
+        }
+        return null
       },
 
       getDailyPlans: () => {

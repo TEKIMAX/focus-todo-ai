@@ -148,3 +148,33 @@ export interface ModelValidationResult {
   models?: OllamaModel[]
 }
 
+export interface DocumentGenerationRequest {
+  projectName: string
+  projectDescription: string
+  timeline: string
+  deliverables: string[]
+  stakeholders: string[]
+  budget?: string
+  constraints?: string
+  requirements: string[]
+}
+
+export interface GeneratedDocument {
+  id: string
+  title: string
+  content: string
+  createdAt: Date
+  updatedAt: Date
+  projectName: string
+  status: 'draft' | 'final' | 'archived'
+  version: number
+}
+
+export interface DocumentTemplate {
+  id: string
+  name: string
+  description: string
+  category: 'sow' | 'proposal' | 'report' | 'timeline'
+  content: string
+}
+

@@ -89,6 +89,8 @@ export async function POST(request: NextRequest) {
         return await handleGenerateDailyPlan(provider, requestData)
       case 'rewrite-description':
         return await handleRewriteDescription(provider, requestData)
+      case 'generate-sow-document':
+        return await handleGenerateSOWDocument(provider, requestData)
       default:
         return NextResponse.json(
           { error: 'Invalid request type' },
@@ -293,5 +295,55 @@ Return only the rewritten paragraph.`,
 
   return NextResponse.json({ 
     rewrittenText: result.text 
+  })
+}
+
+async function handleGenerateSOWDocument(provider: any, data: any) {
+  const result = await generateText({
+    model: provider,
+    prompt: `Create a comprehensive Statement of Work (SOW) document based on the following project information:
+
+PROJECT DETAILS:
+- Project Name: ${data.projectData.projectName}
+- Project Description: ${data.projectData.projectDescription}
+- Timeline: ${data.projectData.timeline}
+- Budget: ${data.projectData.budget || 'Not specified'}
+- Constraints: ${data.projectData.constraints || 'None specified'}
+
+DELIVERABLES:
+${data.projectData.deliverables.map((d: string, i: number) => `${i + 1}. ${d}`).join('\n')}
+
+STAKEHOLDERS:
+${data.projectData.stakeholders.map((s: string, i: number) => `${i + 1}. ${s}`).join('\n')}
+
+REQUIREMENTS:
+${data.projectData.requirements.map((r: string, i: number) => `${i + 1}. ${r}`).join('\n')}
+
+Please create a professional SOW document with the following structure:
+
+1. Executive Summary
+2. Project Overview
+3. Objectives and Scope
+4. Deliverables
+5. Timeline and Milestones
+6. Roles and Responsibilities
+7. Budget and Resources
+8. Risk Management
+9. Quality Assurance
+10. Acceptance Criteria
+11. Terms and Conditions
+
+Format the document with proper HTML structure, including:
+- H1, H2, H3 headings
+- Tables for timelines, deliverables, and stakeholders
+- Bullet points and numbered lists
+- Professional formatting
+- Clear sections and subsections
+
+Make it comprehensive, professional, and ready for client presentation. Include specific details from the provided information and add relevant business context where appropriate.`,
+  })
+
+  return NextResponse.json({ 
+    content: result.text 
   })
 }
