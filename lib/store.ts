@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import { createJSONStorage, persist } from 'zustand/middleware'
-import { TodoItem, DailyPlan, AISettings, TaskCompletionDialog, TodoUpdateLog } from './types'
+import { TodoItem, DailyPlan, AISettings, TaskCompletionDialog, TodoUpdateLog, AppSettings } from './types'
 
 interface TodoStore {
   // State
@@ -8,24 +8,28 @@ interface TodoStore {
   currentPlan: DailyPlan | null
   items: TodoItem[]
   aiSettings: AISettings
+  appSettings: AppSettings
   isOrganizing: boolean
   currentFocusItem: TodoItem | null
   focusStartTime: Date | null
   completionDialog: TaskCompletionDialog
   detailPanelOpen: boolean
   selectedTodo: TodoItem | null
+  showSettings: boolean
 
   // Actions
   setHasCompletedOnboarding: (completed: boolean) => void
   setCurrentPlan: (plan: DailyPlan | null) => void
   setItems: (items: TodoItem[] | ((prev: TodoItem[]) => TodoItem[])) => void
   setAiSettings: (settings: AISettings) => void
+  setAppSettings: (settings: Partial<AppSettings>) => void
   setIsOrganizing: (organizing: boolean) => void
   setCurrentFocusItem: (item: TodoItem | null) => void
   setFocusStartTime: (time: Date | null) => void
   setCompletionDialog: (dialog: TaskCompletionDialog) => void
   setDetailPanelOpen: (open: boolean) => void
   setSelectedTodo: (todo: TodoItem | null) => void
+  setShowSettings: (show: boolean) => void
 
   // Helper actions
   addUpdateLog: (todoId: number, field: string, oldValue: string, newValue: string, updatedBy: 'ai' | 'human', context?: string) => void
@@ -35,6 +39,8 @@ interface TodoStore {
   updateTodo: (todoId: number, updates: Partial<TodoItem>, updatedBy: 'human' | 'ai', context?: string) => void
   openDetailPanel: (todo: TodoItem) => void
   closeDetailPanel: () => void
+  openSettings: () => void
+  closeSettings: () => void
 }
 
 export const useTodoStore = create<TodoStore>()(
@@ -49,6 +55,16 @@ export const useTodoStore = create<TodoStore>()(
         temperature: 0.5,
         maxTokens: 1000,
       },
+      appSettings: {
+        useOllama: false,
+        ollamaBaseUrl: 'http://localhost:11434',
+        selectedModel: '',
+        availableModels: [],
+        aiProvider: 'openai',
+        theme: 'dark',
+        autoSave: true,
+        notifications: true,
+      },
       isOrganizing: false,
       currentFocusItem: null,
       focusStartTime: null,
@@ -60,6 +76,7 @@ export const useTodoStore = create<TodoStore>()(
       },
       detailPanelOpen: false,
       selectedTodo: null,
+      showSettings: false,
 
       // Basic setters
       setHasCompletedOnboarding: (completed) => set({ hasCompletedOnboarding: completed }),
@@ -68,12 +85,16 @@ export const useTodoStore = create<TodoStore>()(
         items: typeof items === 'function' ? items(state.items) : items 
       })),
       setAiSettings: (settings) => set({ aiSettings: settings }),
+      setAppSettings: (settings) => set((state) => ({ 
+        appSettings: { ...state.appSettings, ...settings } 
+      })),
       setIsOrganizing: (organizing) => set({ isOrganizing: organizing }),
       setCurrentFocusItem: (item) => set({ currentFocusItem: item }),
       setFocusStartTime: (time) => set({ focusStartTime: time }),
       setCompletionDialog: (dialog) => set({ completionDialog: dialog }),
       setDetailPanelOpen: (open) => set({ detailPanelOpen: open }),
       setSelectedTodo: (todo) => set({ selectedTodo: todo }),
+      setShowSettings: (show) => set({ showSettings: show }),
 
       // Helper actions
       addUpdateLog: (todoId, field, oldValue, newValue, updatedBy, context) => {
@@ -200,6 +221,14 @@ export const useTodoStore = create<TodoStore>()(
           selectedTodo: null
         })
       },
+
+      openSettings: () => {
+        set({ showSettings: true })
+      },
+
+      closeSettings: () => {
+        set({ showSettings: false })
+      },
     }),
     {
       name: 'focus-todo-storage',
@@ -210,6 +239,7 @@ export const useTodoStore = create<TodoStore>()(
         currentPlan: state.currentPlan,
         items: state.items,
         aiSettings: state.aiSettings,
+        appSettings: state.appSettings,
       }),
       // Serialize dates properly
       serialize: (state) => {

@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from "framer-motion"
 import { Calendar, Clock, Target, Brain, ChevronRight, Check, Plus, X, Sparkles } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
+import { useTodoStore } from "@/lib/store"
 import { OnboardingData, AIQuestion, DailyPlan } from "@/lib/types"
 
 interface DailyOnboardingProps {
@@ -13,6 +14,7 @@ interface DailyOnboardingProps {
 }
 
 export function DailyOnboarding({ onComplete, onSkip }: DailyOnboardingProps) {
+  const { appSettings } = useTodoStore()
   const [step, setStep] = useState(0)
   const [onboardingData, setOnboardingData] = useState<OnboardingData>({
     dailyDescription: "",
@@ -38,14 +40,16 @@ export function DailyOnboarding({ onComplete, onSkip }: DailyOnboardingProps) {
     setIsGeneratingQuestions(true)
     
     try {
-      const response = await fetch('/api/generate-questions', {
+      const response = await fetch('/api/ai-generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
-          description: onboardingData.dailyDescription,
+          type: 'generate-questions',
+          userInput: onboardingData.dailyDescription,
           availableTime: onboardingData.availableTime,
           startTime: onboardingData.startTime,
-          endTime: onboardingData.endTime
+          endTime: onboardingData.endTime,
+          appSettings
         }),
         signal: controller.signal
       })

@@ -15,6 +15,7 @@ import { DailyOnboarding } from "@/components/daily-onboarding"
 import { TaskCompletionDialog } from "@/components/task-completion-dialog"
 import { ProgressBadge } from "@/components/progress-badge"
 import { TodoDetailPanel } from "@/components/todo-detail-panel"
+import { SettingsPage } from "@/components/settings-page"
 import { useTodoStore } from "@/lib/store"
 import type { TodoItem, OrganizeRequest, OrganizeResponse, DailyPlan, ProgressBadge as ProgressBadgeType } from "@/lib/types"
 
@@ -25,15 +26,18 @@ export function EnhancedFocusTodoApp() {
     currentPlan,
     items,
     aiSettings,
+    appSettings,
     isOrganizing,
     currentFocusItem,
     focusStartTime,
     completionDialog,
     detailPanelOpen,
     selectedTodo,
+    showSettings,
     setHasCompletedOnboarding,
     setCurrentPlan,
     setItems,
+    setAppSettings,
     setIsOrganizing,
     setCurrentFocusItem,
     setFocusStartTime,
@@ -45,6 +49,8 @@ export function EnhancedFocusTodoApp() {
     updateTodo,
     openDetailPanel,
     closeDetailPanel,
+    openSettings,
+    closeSettings,
   } = useTodoStore()
 
   // Check if we should show onboarding
@@ -348,6 +354,17 @@ export function EnhancedFocusTodoApp() {
     )
   }
 
+  // Show settings page
+  if (showSettings) {
+    return (
+      <SettingsPage
+        settings={appSettings}
+        onSettingsChange={setAppSettings}
+        onClose={closeSettings}
+      />
+    )
+  }
+
   if (!hasCompletedOnboarding) {
     return (
       <DailyOnboarding 
@@ -371,6 +388,15 @@ export function EnhancedFocusTodoApp() {
           <div className="flex items-center justify-between mb-4">
             <h1 className="text-3xl font-bold">Focus Todo AI</h1>
             <div className="flex items-center space-x-2">
+              <Button
+                onClick={openSettings}
+                variant="ghost"
+                size="sm"
+                className="text-neutral-400 hover:text-white"
+              >
+                <Settings className="w-4 h-4 mr-2" />
+                Settings
+              </Button>
               <Button
                 onClick={handleResetItems}
                 variant="ghost"

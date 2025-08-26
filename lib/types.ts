@@ -110,3 +110,41 @@ export interface ProgressBadge {
   percentage: number
 }
 
+export interface AppSettings {
+  openaiApiKey?: string
+  useOllama: boolean
+  ollamaBaseUrl: string
+  selectedModel: string
+  availableModels: OllamaModel[]
+  aiProvider: 'openai' | 'ollama'
+  theme: 'light' | 'dark' | 'system'
+  autoSave: boolean
+  notifications: boolean
+}
+
+export interface OllamaModel {
+  name: string
+  model: string
+  size: number
+  digest: string
+  details: {
+    format: string
+    family: string
+    families: string[]
+    parameter_size: string
+    quantization_level: string
+  }
+  expires_at: string
+  size_vram: number
+}
+
+export interface OllamaResponse {
+  models: OllamaModel[]
+}
+
+export interface ModelValidationResult {
+  isValid: boolean
+  error?: string
+  models?: OllamaModel[]
+}
+
