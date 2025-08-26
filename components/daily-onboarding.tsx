@@ -86,12 +86,21 @@ export function DailyOnboarding({ onComplete, onSkip }: DailyOnboardingProps) {
     setIsGeneratingTodos(true)
     
     try {
-      const response = await fetch('/api/generate-daily-plan', {
+      const response = await fetch('/api/ai-generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          onboardingData,
-          questions: aiQuestions,
+          type: 'generate-daily-plan',
+          userInput: onboardingData.dailyDescription,
+          availableTime: onboardingData.availableTime,
+          startTime: onboardingData.startTime,
+          endTime: onboardingData.endTime,
+          currentDate: onboardingData.currentDate.toISOString(),
+          answeredQuestions: aiQuestions.filter(q => q.answered).map(q => ({
+            question: q.question,
+            answer: q.answer
+          })),
+          appSettings
         }),
         signal: controller.signal
       })
@@ -137,10 +146,14 @@ export function DailyOnboarding({ onComplete, onSkip }: DailyOnboardingProps) {
     setIsRewriting(true)
     
     try {
-      const response = await fetch('/api/rewrite-description', {
+      const response = await fetch('/api/ai-generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ bulletPoints: bulletPoints.trim() }),
+        body: JSON.stringify({
+          type: 'rewrite-description',
+          bulletPoints: bulletPoints.trim(),
+          appSettings
+        }),
         signal: controller.signal
       })
 
@@ -187,7 +200,7 @@ export function DailyOnboarding({ onComplete, onSkip }: DailyOnboardingProps) {
               value={onboardingData.dailyDescription}
               onChange={(e) => setOnboardingData(prev => ({ ...prev, dailyDescription: e.target.value }))}
               placeholder="Include dates, times, priorities, meetings, deadlines, projects you're working on, personal tasks, etc. The more detail the better!"
-              className="w-full h-32 p-4 bg-neutral-900 border border-neutral-700 rounded-lg text-white placeholder-neutral-500 resize-none focus:outline-none focus:ring-2 focus:ring-[#13EEE3]"
+              className="w-full h-32 p-4 bg-neutral-900 border border-neutral-700 rounded-lg text-white placeholder-neutral-500 resize-none focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
             
             <div className="border-t border-neutral-800 pt-3">
@@ -209,7 +222,7 @@ export function DailyOnboarding({ onComplete, onSkip }: DailyOnboardingProps) {
                     onClick={handleAIRewrite}
                     disabled={!bulletPoints.trim() || isRewriting}
                     size="sm"
-                    className="bg-[#13EEE3] hover:bg-[#13EEE3]/80 text-black"
+                    className="bg-blue-600 hover:bg-blue-700 text-white"
                   >
                     {isRewriting ? (
                       <>
@@ -230,7 +243,7 @@ export function DailyOnboarding({ onComplete, onSkip }: DailyOnboardingProps) {
                 value={bulletPoints}
                 onChange={(e) => setBulletPoints(e.target.value)}
                 placeholder="• Meeting with John at 2pm&#10;• Finish project proposal&#10;• Call client about contract&#10;• Pick up groceries..."
-                className="w-full h-20 p-3 bg-neutral-800 border border-neutral-600 rounded text-white placeholder-neutral-400 resize-none focus:outline-none focus:ring-2 focus:ring-[#13EEE3] text-sm"
+                className="w-full h-20 p-3 bg-neutral-800 border border-neutral-600 rounded text-white placeholder-neutral-400 resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
               />
               
               <div className="text-xs text-neutral-500 mt-2">
@@ -282,7 +295,7 @@ export function DailyOnboarding({ onComplete, onSkip }: DailyOnboardingProps) {
                 placeholder="Add a priority..."
                 className="flex-1 p-3 bg-neutral-900 border border-neutral-700 rounded-lg text-white placeholder-neutral-500"
               />
-              <Button onClick={addPriority} size="icon" className="bg-[#13EEE3] hover:bg-[#13EEE3]/80">
+              <Button onClick={addPriority} size="icon" className="bg-blue-600 hover:bg-blue-700">
                 <Plus className="h-4 w-4" />
               </Button>
             </div>
@@ -319,7 +332,7 @@ export function DailyOnboarding({ onComplete, onSkip }: DailyOnboardingProps) {
               className="p-4 bg-neutral-900 border border-neutral-700 rounded-lg"
             >
               <div className="flex items-start space-x-3">
-                <Brain className="h-5 w-5 text-[#13EEE3] mt-1 flex-shrink-0" />
+                <Brain className="h-5 w-5 text-blue-400 mt-1 flex-shrink-0" />
                 <div className="flex-1">
                   <p className="text-white mb-3">{question.question}</p>
                   {question.answered ? (
@@ -346,9 +359,9 @@ export function DailyOnboarding({ onComplete, onSkip }: DailyOnboardingProps) {
 
   const currentStep = steps[step]
   const canProceed = step === 0 
-    ? onboardingData.dailyDescription.trim().length > 50
+    ? onboardingData.dailyDescription.trim().length > 20
     : step === 1
-    ? onboardingData.startTime && onboardingData.endTime && onboardingData.priorities.length > 0
+    ? onboardingData.startTime && onboardingData.endTime
     : step === 2
     ? aiQuestions.every(q => q.answered)
     : false
@@ -374,7 +387,7 @@ export function DailyOnboarding({ onComplete, onSkip }: DailyOnboardingProps) {
                 key={index}
                 className={cn(
                   "h-2 rounded-full transition-colors",
-                  index <= step ? "bg-[#13EEE3]" : "bg-neutral-700",
+                  index <= step ? "bg-blue-500" : "bg-neutral-700",
                   index === step ? "flex-1" : "w-8"
                 )}
               />
@@ -425,7 +438,7 @@ export function DailyOnboarding({ onComplete, onSkip }: DailyOnboardingProps) {
               <Button
                 onClick={step === 0 ? handleDescriptionSubmit : () => setStep(step + 1)}
                 disabled={!canProceed || isGeneratingQuestions}
-                className="bg-[#13EEE3] hover:bg-[#13EEE3]/80 text-black"
+                className="bg-blue-600 hover:bg-blue-700 text-white"
               >
                 {isGeneratingQuestions ? (
                   <>
@@ -443,7 +456,7 @@ export function DailyOnboarding({ onComplete, onSkip }: DailyOnboardingProps) {
               <Button
                 onClick={handleGenerateTodos}
                 disabled={!canProceed || isGeneratingTodos}
-                className="bg-[#13EEE3] hover:bg-[#13EEE3]/80 text-black"
+                className="bg-blue-600 hover:bg-blue-700 text-white"
               >
                 {isGeneratingTodos ? (
                   <>

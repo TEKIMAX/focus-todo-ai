@@ -1,7 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useState } from "react"
-import { Plus, RepeatIcon, Settings2Icon, XIcon, Brain, Clock, Target, Play, Pause, Settings } from "lucide-react"
+import { Plus, RepeatIcon, Settings2Icon, XIcon, Brain, Clock, Target, Play, Pause, Settings, Trash2, History } from "lucide-react"
 import { AnimatePresence, LayoutGroup, motion } from "framer-motion"
 import { toast } from "sonner"
 
@@ -17,6 +17,7 @@ import { ProgressBadge } from "@/components/progress-badge"
 import { TodoDetailPanel } from "@/components/todo-detail-panel"
 import { SettingsPage } from "@/components/settings-page"
 import { LandingPage } from "@/components/landing-page"
+import { HistoryPage } from "@/components/history-page"
 import { useTodoStore } from "@/lib/store"
 import type { TodoItem, OrganizeRequest, OrganizeResponse, DailyPlan, ProgressBadge as ProgressBadgeType } from "@/lib/types"
 
@@ -46,17 +47,21 @@ export function EnhancedFocusTodoApp() {
     addUpdateLog,
     completeItem,
     addItem,
+    deleteItem,
     resetItems,
     updateTodo,
     openDetailPanel,
     closeDetailPanel,
     openSettings,
     closeSettings,
+    saveDailyPlan,
+    getDailyPlans,
   } = useTodoStore()
 
   // State for aborting AI operations
   const [abortController, setAbortController] = useState<AbortController | null>(null)
   const [showLanding, setShowLanding] = useState(true)
+  const [showHistory, setShowHistory] = useState(false)
 
   // Check if we should show onboarding
   useEffect(() => {
@@ -82,13 +87,16 @@ export function EnhancedFocusTodoApp() {
     localStorage.setItem('lastOnboardingDate', today)
     localStorage.setItem(`dailyPlan_${today}`, JSON.stringify(plan))
     
+    // Save to history
+    saveDailyPlan(plan)
+    
     setCurrentPlan(plan)
     setItems(plan.todos)
     setHasCompletedOnboarding(true)
     toast.success("Your daily plan is ready!", {
       description: `${plan.todos.length} tasks organized for maximum productivity`
     })
-  }, [])
+  }, [saveDailyPlan])
 
   const handleSkipOnboarding = useCallback(() => {
     setHasCompletedOnboarding(true)
@@ -280,6 +288,11 @@ export function EnhancedFocusTodoApp() {
     updateTodo(todoId, updates, updatedBy, context)
   }, [updateTodo])
 
+  const handleDeleteItem = useCallback((id: number) => {
+    deleteItem(id)
+    toast.success("Task deleted")
+  }, [deleteItem])
+
   const renderListItem = (item: TodoItem, index: number) => {
     const progress = getProgressBadge(item)
     
@@ -342,6 +355,14 @@ export function EnhancedFocusTodoApp() {
             
             <div className="flex items-center space-x-2">
               <Button
+                onClick={() => handleDeleteItem(item.id)}
+                size="sm"
+                variant="ghost"
+                className="text-red-400 hover:text-red-300 hover:bg-red-500/10"
+              >
+                <Trash2 className="w-3 h-3" />
+              </Button>
+              <Button
                 onClick={() => handleOpenDetailPanel(item)}
                 size="sm"
                 variant="ghost"
@@ -356,7 +377,7 @@ export function EnhancedFocusTodoApp() {
                   disabled={!!currentFocusItem}
                   size="sm"
                   className={cn(
-                    "bg-[#13EEE3] hover:bg-[#13EEE3]/80 text-black",
+                    "bg-green-600 hover:bg-green-700 text-white",
                     item.isCurrentlyActive && "bg-orange-500 hover:bg-orange-600 text-white"
                   )}
                 >
@@ -384,6 +405,16 @@ export function EnhancedFocusTodoApp() {
   if (showLanding) {
     return (
       <LandingPage onGetStarted={() => setShowLanding(false)} />
+    )
+  }
+
+  // Show history page
+  if (showHistory) {
+    return (
+      <HistoryPage
+        onClose={() => setShowHistory(false)}
+        getDailyPlans={getDailyPlans}
+      />
     )
   }
 
@@ -421,6 +452,15 @@ export function EnhancedFocusTodoApp() {
           <div className="flex items-center justify-between mb-4">
             <h1 className="text-3xl font-bold">Focus Todo AI</h1>
             <div className="flex items-center space-x-2">
+              <Button
+                onClick={() => setShowHistory(true)}
+                variant="ghost"
+                size="sm"
+                className="text-neutral-400 hover:text-white"
+              >
+                <History className="w-4 h-4 mr-2" />
+                History
+              </Button>
               <Button
                 onClick={openSettings}
                 variant="ghost"

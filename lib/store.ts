@@ -35,12 +35,15 @@ interface TodoStore {
   addUpdateLog: (todoId: number, field: string, oldValue: string, newValue: string, updatedBy: 'ai' | 'human', context?: string) => void
   completeItem: (id: number, completed?: boolean) => void
   addItem: () => void
+  deleteItem: (id: number) => void
   resetItems: () => void
   updateTodo: (todoId: number, updates: Partial<TodoItem>, updatedBy: 'human' | 'ai', context?: string) => void
   openDetailPanel: (todo: TodoItem) => void
   closeDetailPanel: () => void
   openSettings: () => void
   closeSettings: () => void
+  saveDailyPlan: (plan: DailyPlan) => void
+  getDailyPlans: () => DailyPlan[]
 }
 
 export const useTodoStore = create<TodoStore>()(
@@ -166,6 +169,12 @@ export const useTodoStore = create<TodoStore>()(
         set((state) => ({ items: [...state.items, newItem] }))
       },
 
+      deleteItem: (id: number) => {
+        set((state) => ({ 
+          items: state.items.filter(item => item.id !== id) 
+        }))
+      },
+
       resetItems: () => {
         set({ 
           items: [],
@@ -228,6 +237,27 @@ export const useTodoStore = create<TodoStore>()(
 
       closeSettings: () => {
         set({ showSettings: false })
+      },
+
+      saveDailyPlan: (plan: DailyPlan) => {
+        const today = plan.date.toDateString()
+        const savedPlans = JSON.parse(localStorage.getItem('dailyPlans') || '{}')
+        savedPlans[today] = plan
+        localStorage.setItem('dailyPlans', JSON.stringify(savedPlans))
+      },
+
+      getDailyPlans: () => {
+        const savedPlans = JSON.parse(localStorage.getItem('dailyPlans') || '{}')
+        return Object.values(savedPlans).map((plan: any) => ({
+          ...plan,
+          date: new Date(plan.date),
+          todos: plan.todos.map((todo: any) => ({
+            ...todo,
+            createdAt: new Date(todo.createdAt),
+            completedAt: todo.completedAt ? new Date(todo.completedAt) : undefined,
+            deadline: todo.deadline ? new Date(todo.deadline) : undefined
+          }))
+        })) as DailyPlan[]
       },
     }),
     {
