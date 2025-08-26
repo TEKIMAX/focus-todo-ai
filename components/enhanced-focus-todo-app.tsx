@@ -53,6 +53,9 @@ export function EnhancedFocusTodoApp() {
     closeSettings,
   } = useTodoStore()
 
+  // State for aborting AI operations
+  const [abortController, setAbortController] = useState<AbortController | null>(null)
+
   // Check if we should show onboarding
   useEffect(() => {
     const today = new Date().toDateString()
@@ -127,7 +130,10 @@ export function EnhancedFocusTodoApp() {
   const organizeWithAI = useCallback(async () => {
     if (isOrganizing || items.length === 0) return
     
+    const controller = new AbortController()
+    setAbortController(controller)
     setIsOrganizing(true)
+    
     try {
       const availableMinutes = currentPlan ? currentPlan.availableHours * 60 : 480 // 8 hours default
       const request: OrganizeRequest = {
@@ -136,10 +142,15 @@ export function EnhancedFocusTodoApp() {
         focusMode: 'balanced',
       }
 
-      const response = await fetch('/api/organize-todos', {
+      const response = await fetch('/api/ai-generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(request),
+        body: JSON.stringify({
+          type: 'organize-todos',
+          ...request,
+          appSettings
+        }),
+        signal: controller.signal
       })
 
       if (!response.ok) throw new Error('Failed to organize todos')
@@ -159,12 +170,25 @@ export function EnhancedFocusTodoApp() {
         description: result.reasoning,
       })
     } catch (error) {
-      console.error('Error organizing todos:', error)
-      toast.error("Failed to organize todos")
+      if (error instanceof Error && error.name === 'AbortError') {
+        toast.info("AI organization cancelled")
+      } else {
+        console.error('Error organizing todos:', error)
+        toast.error("Failed to organize todos")
+      }
     } finally {
       setIsOrganizing(false)
+      setAbortController(null)
     }
   }, [items, currentPlan, isOrganizing, setIsOrganizing, setItems, addUpdateLog])
+
+  const stopAIOrganizing = useCallback(() => {
+    if (abortController) {
+      abortController.abort()
+      setAbortController(null)
+      setIsOrganizing(false)
+    }
+  }, [abortController, setIsOrganizing])
 
   const startFocusSession = useCallback((item: TodoItem) => {
     // Mark current item as active and stop any other active items
@@ -472,24 +496,26 @@ export function EnhancedFocusTodoApp() {
               Add Task
             </Button>
             
-            <Button
-              onClick={organizeWithAI}
-              disabled={isOrganizing || items.length === 0}
-              variant="outline"
-              className="border-[#13EEE3] text-[#13EEE3] hover:bg-[#13EEE3] hover:text-black"
-            >
-              {isOrganizing ? (
-                <>
-                  <div className="w-4 h-4 border-2 border-[#13EEE3] border-t-transparent rounded-full animate-spin mr-2" />
-                  Organizing...
-                </>
-              ) : (
-                <>
-                  <Brain className="w-4 h-4 mr-2" />
-                  AI Organize
-                </>
-              )}
-            </Button>
+            {isOrganizing ? (
+              <Button
+                onClick={stopAIOrganizing}
+                variant="outline"
+                className="border-red-500 text-red-400 hover:bg-red-500 hover:text-white"
+              >
+                <X className="w-4 h-4 mr-2" />
+                Stop Organizing
+              </Button>
+            ) : (
+              <Button
+                onClick={organizeWithAI}
+                disabled={items.length === 0}
+                variant="outline"
+                className="border-[#13EEE3] text-[#13EEE3] hover:bg-[#13EEE3] hover:text-black"
+              >
+                <Brain className="w-4 h-4 mr-2" />
+                AI Organize
+              </Button>
+            )}
           </div>
         </div>
 
