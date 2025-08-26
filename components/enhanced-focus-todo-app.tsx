@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useEffect } from "react"
+import { useCallback, useEffect, useState } from "react"
 import { Plus, RepeatIcon, Settings2Icon, XIcon, Brain, Clock, Target, Play, Pause, Settings } from "lucide-react"
 import { AnimatePresence, LayoutGroup, motion } from "framer-motion"
 import { toast } from "sonner"
@@ -16,6 +16,7 @@ import { TaskCompletionDialog } from "@/components/task-completion-dialog"
 import { ProgressBadge } from "@/components/progress-badge"
 import { TodoDetailPanel } from "@/components/todo-detail-panel"
 import { SettingsPage } from "@/components/settings-page"
+import { LandingPage } from "@/components/landing-page"
 import { useTodoStore } from "@/lib/store"
 import type { TodoItem, OrganizeRequest, OrganizeResponse, DailyPlan, ProgressBadge as ProgressBadgeType } from "@/lib/types"
 
@@ -55,6 +56,7 @@ export function EnhancedFocusTodoApp() {
 
   // State for aborting AI operations
   const [abortController, setAbortController] = useState<AbortController | null>(null)
+  const [showLanding, setShowLanding] = useState(true)
 
   // Check if we should show onboarding
   useEffect(() => {
@@ -282,11 +284,11 @@ export function EnhancedFocusTodoApp() {
     const progress = getProgressBadge(item)
     
     return (
-      <Reorder.Item
-        key={item.id}
-        value={item}
-        className="mb-4 p-4 bg-neutral-900 border border-neutral-800 rounded-lg cursor-grab active:cursor-grabbing"
-      >
+              <Reorder.Item
+          key={item.id}
+          value={item}
+          className="mb-4 p-4 bg-gray-900 border border-gray-800 rounded-lg cursor-grab active:cursor-grabbing"
+        >
         <div className="flex flex-col space-y-3">
           <div className="flex items-start justify-between">
             <div className="flex-1 min-w-0">
@@ -378,6 +380,13 @@ export function EnhancedFocusTodoApp() {
     )
   }
 
+  // Show landing page
+  if (showLanding) {
+    return (
+      <LandingPage onGetStarted={() => setShowLanding(false)} />
+    )
+  }
+
   // Show settings page
   if (showSettings) {
     return (
@@ -434,7 +443,7 @@ export function EnhancedFocusTodoApp() {
           </div>
           
           {currentPlan && (
-            <div className="bg-neutral-900 border border-neutral-800 rounded-lg p-4 mb-4">
+            <div className="bg-gray-900 border border-gray-800 rounded-lg p-4 mb-4">
               <div className="flex items-center justify-between mb-2">
                 <h2 className="text-lg font-semibold">Today's Plan</h2>
                 <div className="text-sm text-neutral-400">
@@ -462,7 +471,7 @@ export function EnhancedFocusTodoApp() {
         {/* Focus Timer */}
         {currentFocusItem && (
           <div className="mb-8">
-            <div className="bg-neutral-950 border border-neutral-800 rounded-xl p-6">
+            <div className="bg-black border border-gray-800 rounded-xl p-6">
               <div className="text-center mb-4">
                 <h3 className="text-xl font-semibold mb-2">Focus Session</h3>
                 <p className="text-neutral-400">{currentFocusItem.text}</p>
@@ -490,7 +499,7 @@ export function EnhancedFocusTodoApp() {
           <div className="flex items-center space-x-3">
             <Button
               onClick={handleAddItem}
-              className="bg-[#13EEE3] hover:bg-[#13EEE3]/80 text-black"
+              className="bg-blue-600 hover:bg-blue-700 text-white"
             >
               <Plus className="w-4 h-4 mr-2" />
               Add Task
@@ -510,7 +519,7 @@ export function EnhancedFocusTodoApp() {
                 onClick={organizeWithAI}
                 disabled={items.length === 0}
                 variant="outline"
-                className="border-[#13EEE3] text-[#13EEE3] hover:bg-[#13EEE3] hover:text-black"
+                className="border-blue-500 text-blue-400 hover:bg-blue-500 hover:text-white"
               >
                 <Brain className="w-4 h-4 mr-2" />
                 AI Organize
@@ -520,7 +529,7 @@ export function EnhancedFocusTodoApp() {
         </div>
 
         {/* Todo List */}
-        <div className="bg-neutral-950 border border-neutral-800 rounded-xl">
+        <div className="bg-black border border-gray-800 rounded-xl">
           {items.length === 0 ? (
             <div className="p-12 text-center">
               <div className="text-neutral-500 mb-4">
@@ -529,7 +538,7 @@ export function EnhancedFocusTodoApp() {
               </div>
               <Button
                 onClick={handleAddItem}
-                className="bg-[#13EEE3] hover:bg-[#13EEE3]/80 text-black"
+                className="bg-blue-600 hover:bg-blue-700 text-white"
               >
                 <Plus className="w-4 h-4 mr-2" />
                 Add Task
