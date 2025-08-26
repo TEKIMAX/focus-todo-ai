@@ -19,6 +19,7 @@ import { SettingsPage } from "@/components/settings-page"
 import { LandingPage } from "@/components/landing-page"
 import { HistoryPage } from "@/components/history-page"
 import { DocumentGenerationPage } from "@/components/document-generation-page"
+import { TipTapDocumentPage } from "@/components/tiptap-document-page"
 import { useTodoStore } from "@/lib/store"
 import type { TodoItem, OrganizeRequest, OrganizeResponse, DailyPlan, ProgressBadge as ProgressBadgeType } from "@/lib/types"
 
@@ -38,6 +39,7 @@ export function EnhancedFocusTodoApp() {
     selectedTodo,
     showSettings,
     showDocumentGeneration,
+    showTipTapDocuments,
     setHasCompletedOnboarding,
     setCurrentPlan,
     setItems,
@@ -57,6 +59,7 @@ export function EnhancedFocusTodoApp() {
     openSettings,
     closeSettings,
     setShowDocumentGeneration,
+    setShowTipTapDocuments,
     saveDailyPlan,
     saveCurrentDayToHistory,
     getDailyPlans,
@@ -445,6 +448,15 @@ export function EnhancedFocusTodoApp() {
     )
   }
 
+  // Show TipTap documents page
+  if (showTipTapDocuments) {
+    return (
+      <TipTapDocumentPage
+        onClose={() => setShowTipTapDocuments(false)}
+      />
+    )
+  }
+
   // Show settings page
   if (showSettings) {
     return (
@@ -490,6 +502,15 @@ export function EnhancedFocusTodoApp() {
               </Button>
               <Button
                 onClick={() => setShowDocumentGeneration(true)}
+                variant="ghost"
+                size="sm"
+                className="text-neutral-400 hover:text-white"
+              >
+                <FileText className="w-4 h-4 mr-2" />
+                SOW Generator
+              </Button>
+              <Button
+                onClick={() => setShowTipTapDocuments(true)}
                 variant="ghost"
                 size="sm"
                 className="text-neutral-400 hover:text-white"

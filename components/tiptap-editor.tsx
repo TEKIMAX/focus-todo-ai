@@ -18,7 +18,7 @@ import Typography from '@tiptap/extension-typography'
 import Placeholder from '@tiptap/extension-placeholder'
 import Color from '@tiptap/extension-color'
 import FontFamily from '@tiptap/extension-font-family'
-import TextStyle from '@tiptap/extension-text-style'
+import { TextStyle } from '@tiptap/extension-text-style'
 import { 
   Bold, 
   Italic, 

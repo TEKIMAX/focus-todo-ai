@@ -17,6 +17,7 @@ interface TodoStore {
   selectedTodo: TodoItem | null
   showSettings: boolean
   showDocumentGeneration: boolean
+  showTipTapDocuments: boolean
 
   // Actions
   setHasCompletedOnboarding: (completed: boolean) => void
@@ -32,6 +33,7 @@ interface TodoStore {
   setSelectedTodo: (todo: TodoItem | null) => void
   setShowSettings: (show: boolean) => void
   setShowDocumentGeneration: (show: boolean) => void
+  setShowTipTapDocuments: (show: boolean) => void
 
   // Helper actions
   addUpdateLog: (todoId: number, field: string, oldValue: string, newValue: string, updatedBy: 'ai' | 'human', context?: string) => void
@@ -84,6 +86,7 @@ export const useTodoStore = create<TodoStore>()(
       selectedTodo: null,
       showSettings: false,
       showDocumentGeneration: false,
+      showTipTapDocuments: false,
 
       // Basic setters
       setHasCompletedOnboarding: (completed) => set({ hasCompletedOnboarding: completed }),
@@ -103,6 +106,7 @@ export const useTodoStore = create<TodoStore>()(
       setSelectedTodo: (todo) => set({ selectedTodo: todo }),
       setShowSettings: (show) => set({ showSettings: show }),
       setShowDocumentGeneration: (show) => set({ showDocumentGeneration: show }),
+      setShowTipTapDocuments: (show) => set({ showTipTapDocuments: show }),
 
       // Helper actions
       addUpdateLog: (todoId, field, oldValue, newValue, updatedBy, context) => {
